@@ -195,6 +195,7 @@ const App: React.FC = () => {
 
       if (userProfile) {
         if (userProfile.status === 'APPROVED') {
+          const previousLastLogin = userProfile.lastLogin;
           const streakResult = await api.syncUserLoginStreak(userProfile);
           const hydratedUser = {
             ...streakResult.user,
@@ -204,11 +205,29 @@ const App: React.FC = () => {
           setView('dashboard');
           cacheUserProfile(hydratedUser);
 
-          // Check if user has seen the feature tour
-          const hasSeenTour = localStorage.getItem(`has_seen_tour_${hydratedUser.uid}`);
+          // Track logins per user so guide is shown strictly on 1st time login only
+          const tourSeenKey = `has_seen_tour_${hydratedUser.uid}`;
+          const loginCountKey = `user_login_count_${hydratedUser.uid}`;
+          const loggedInBeforeKey = `user_has_logged_in_${hydratedUser.uid}`;
+
+          const previousLoginCount = parseInt(localStorage.getItem(loginCountKey) || '0', 10);
+          const currentLoginCount = previousLoginCount + 1;
+          localStorage.setItem(loginCountKey, String(currentLoginCount));
+
+          const hasSeenTour = localStorage.getItem(tourSeenKey) === 'true';
+          const hasLoggedInBefore = localStorage.getItem(loggedInBeforeKey) === 'true';
           const hasUnseenDeploymentChangelog = shouldShowDeploymentChangelog(hydratedUser.uid);
-          if (!hasSeenTour) {
+
+          // Only show guide on 1st time login; if user logs in second time continuously or has logged in before, do NOT show it
+          const isFirstTimeLogin = !hasSeenTour && !hasLoggedInBefore && currentLoginCount === 1 && !previousLastLogin;
+
+          // Immediately record that the user has logged in once so subsequent/continuous logins never show it
+          localStorage.setItem(loggedInBeforeKey, 'true');
+
+          if (isFirstTimeLogin) {
             setShowTourModal(true);
+            // Mark tour as seen immediately so refreshing or logging in a 2nd time never shows it
+            localStorage.setItem(tourSeenKey, 'true');
             setPendingDeploymentChangelog(hasUnseenDeploymentChangelog);
             try {
               sessionStorage.setItem('first_login_session', 'true');
@@ -228,7 +247,7 @@ const App: React.FC = () => {
               message: streakResult.notice.message,
               variant: streakResult.notice.type === 'broken' ? 'danger' : 'warning',
             } as const;
-            if (!hasSeenTour || hasUnseenDeploymentChangelog) {
+            if (isFirstTimeLogin || hasUnseenDeploymentChangelog) {
               setPendingStreakNotice(nextNotice);
               setStreakNotice(null);
             } else {
@@ -369,6 +388,7 @@ const App: React.FC = () => {
       setUser(null);
       setView('welcome');
       setActiveTab('feed');
+      setShowTourModal(false);
       setShowDeploymentChangelog(false);
       setPendingDeploymentChangelog(false);
       setStreakNotice(null);

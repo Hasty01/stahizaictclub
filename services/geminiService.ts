@@ -32,16 +32,27 @@ const getGeminiKey = (): string => {
     }
 };
 
+const DEPRECATED_MODELS = new Set([
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+    'gemini-2.0-flash',
+    'gemini-2.0-pro',
+    'gemini-2.0-flash-thinking',
+]);
+
 const getGeminiModel = (): string => {
     try {
         // @ts-ignore
-        return import.meta.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+        const model = import.meta.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+        return DEPRECATED_MODELS.has(model) ? 'gemini-2.5-flash' : model;
     } catch {
         try {
             // @ts-ignore
-            return process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+            const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+            return DEPRECATED_MODELS.has(model) ? 'gemini-2.5-flash' : model;
         } catch {
-            return 'gemini-1.5-flash';
+            return 'gemini-2.5-flash';
         }
     }
 };
@@ -51,7 +62,7 @@ const getCachedGeminiModel = (): string | null => {
     try {
         const model = localStorage.getItem('gemini_model_resolved');
         const ts = Number(localStorage.getItem('gemini_model_resolved_at') || '0');
-        if (model && Date.now() - ts < 1000 * 60 * 60 * 24) return model; // 24h cache
+        if (model && !DEPRECATED_MODELS.has(model) && Date.now() - ts < 1000 * 60 * 60 * 24) return model; // 24h cache
         return null;
     } catch {
         return null;
@@ -61,21 +72,27 @@ const getCachedGeminiModel = (): string | null => {
 const setCachedGeminiModel = (model: string) => {
     if (typeof window === 'undefined') return;
     try {
-        localStorage.setItem('gemini_model_resolved', model);
-        localStorage.setItem('gemini_model_resolved_at', String(Date.now()));
+        if (!DEPRECATED_MODELS.has(model)) {
+            localStorage.setItem('gemini_model_resolved', model);
+            localStorage.setItem('gemini_model_resolved_at', String(Date.now()));
+        }
     } catch { }
 };
 
 const fetchGeminiModels = async (): Promise<string[]> => {
     if (!geminiKey) return [];
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
-    if (!response.ok) return [];
-    const data = await response.json();
-    const models = Array.isArray(data?.models) ? data.models : [];
-    return models
-        .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
-        .map((m: any) => String(m.name || '').replace(/^models\//, ''))
-        .filter(Boolean);
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        const models = Array.isArray(data?.models) ? data.models : [];
+        return models
+            .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+            .map((m: any) => String(m.name || '').replace(/^models\//, ''))
+            .filter((m: string) => Boolean(m) && !DEPRECATED_MODELS.has(m.toLowerCase()));
+    } catch {
+        return [];
+    }
 };
 
 const apiKey = getApiKey();
@@ -190,36 +207,38 @@ const callAI = async (messages: any[], jsonMode: boolean = false): Promise<strin
 };
 
 const pickPreferredModel = (models: string[], preferred: string | null): string | null => {
-    if (!Array.isArray(models) || models.length === 0) return preferred || null;
+    if (!Array.isArray(models) || models.length === 0) return preferred || 'gemini-2.5-flash';
     const normalized = models.map(m => m.trim()).filter(Boolean);
-    if (preferred) {
+    if (preferred && !DEPRECATED_MODELS.has(preferred.toLowerCase())) {
         const direct = normalized.find(m => m.toLowerCase() === preferred.toLowerCase());
         if (direct) return direct;
     }
 
     const preferenceOrder = [
-        'gemini-2.0-pro',
-        'gemini-2.0-flash',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash'
+        'gemini-2.5-flash',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-2.5-pro',
+        'gemini-3.1-flash-lite'
     ];
     for (const pref of preferenceOrder) {
         const match = normalized.find(m => m.toLowerCase() === pref);
         if (match) return match;
     }
-    return normalized[0] || preferred || null;
+    const valid = normalized.filter(m => !DEPRECATED_MODELS.has(m.toLowerCase()));
+    return valid[0] || (preferred && !DEPRECATED_MODELS.has(preferred) ? preferred : 'gemini-2.5-flash');
 };
 
 const resolveGeminiModel = async (forceRefresh: boolean = false): Promise<string> => {
-    const preferred = GEMINI_MODEL || null;
+    const preferred = GEMINI_MODEL && !DEPRECATED_MODELS.has(GEMINI_MODEL) ? GEMINI_MODEL : 'gemini-2.5-flash';
     if (!forceRefresh) {
         const cached = getCachedGeminiModel();
-        if (cached) return cached;
+        if (cached && !DEPRECATED_MODELS.has(cached)) return cached;
     }
     const models = await fetchGeminiModels();
     const chosen = pickPreferredModel(models, preferred);
-    if (chosen) setCachedGeminiModel(chosen);
-    return chosen || preferred || 'gemini-1.5-flash';
+    if (chosen && !DEPRECATED_MODELS.has(chosen)) setCachedGeminiModel(chosen);
+    return chosen || preferred || 'gemini-2.5-flash';
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -286,9 +305,11 @@ const callGemini = async (prompt: string): Promise<string> => {
                         continue;
                     }
                     if (response.status === 404 || response.status === 400) {
-                        // Model not found or invalid; refresh model list and retry once
+                        // Model not found or invalid; cycle through modern fallback models
                         lastError = new Error(`Gemini API Error: ${response.status}`);
-                        model = await resolveGeminiModel(true);
+                        const fallbackModels = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+                        model = fallbackModels[attempt % fallbackModels.length];
+                        setCachedGeminiModel(model);
                         continue;
                     }
                     throw new Error(`Gemini API Error: ${response.status}`);
@@ -331,29 +352,29 @@ export const getAiTutorResponse = async (
     message: string,
     clubContext: string = ''
 ) => {
+    const systemPrompt = `You are a friendly, patient, and wise AI Tutor for St. Joseph's SSS Naggalama Secondary school ICT Club. 
+    Your goal is to TEACH, not to do the work for the students. 
+    
+    DETECT LANGUAGE: Automatically identify if the student is asking about Python or JavaScript.
+    
+    REAL-TIME CLUB INFORMATION:
+    ${clubContext}
+    
+    CRITICAL RULES:
+    1. DO NOT write complete code solutions. Provide hints or pseudo-code.
+    2. Explain concepts specific to the language being used.
+    3. Be encouraging and use emojis.`;
+
+    const chatMessages = [
+        { role: "system", content: systemPrompt },
+        ...history.map(h => ({
+            role: h.role === 'model' ? 'assistant' : 'user',
+            content: h.parts[0].text
+        })),
+        { role: "user", content: message }
+    ];
+
     try {
-        const systemPrompt = `You are a friendly, patient, and wise AI Tutor for St. Joseph's SSS Naggalama Secondary school ICT Club. 
-        Your goal is to TEACH, not to do the work for the students. 
-        
-        DETECT LANGUAGE: Automatically identify if the student is asking about Python or JavaScript.
-        
-        REAL-TIME CLUB INFORMATION:
-        ${clubContext}
-        
-        CRITICAL RULES:
-        1. DO NOT write complete code solutions. Provide hints or pseudo-code.
-        2. Explain concepts specific to the language being used.
-        3. Be encouraging and use emojis.`;
-
-        const chatMessages = [
-            { role: "system", content: systemPrompt },
-            ...history.map(h => ({
-                role: h.role === 'model' ? 'assistant' : 'user',
-                content: h.parts[0].text
-            })),
-            { role: "user", content: message }
-        ];
-
         const text = await callAI(chatMessages);
         return cleanResponse(text);
     } catch (error) {
@@ -683,15 +704,107 @@ export const generateCodingTip = async (lang: 'python' | 'javascript', skillLeve
     For BEGINNER tips, avoid overusing f-strings; rotate across core concepts.
     Include title, explanation, and codeSnippet.`;
 
+    const fallbackTips: Record<'python' | 'javascript', Record<string, CodingTip[]>> = {
+        python: {
+            BEGINNER: [
+                {
+                    title: "List Slicing & Reversing",
+                    explanation: "In Python, sequence slicing [start:stop:step] is very powerful. Using [::-1] instantly reverses any list or string without extra loops.",
+                    codeSnippet: "numbers = [1, 2, 3, 4, 5]\nreversed_nums = numbers[::-1]\nprint(reversed_nums)  # [5, 4, 3, 2, 1]",
+                    language: "python"
+                },
+                {
+                    title: "Enumerate For Index & Value",
+                    explanation: "Instead of manually managing a counter variable, use enumerate() to loop through both the item index and its value cleanly.",
+                    codeSnippet: "languages = ['Python', 'JavaScript', 'SQL']\nfor index, lang in enumerate(languages, start=1):\n    print(f'{index}. {lang}')",
+                    language: "python"
+                },
+                {
+                    title: "Safe Dictionary Lookups with .get()",
+                    explanation: "Accessing a non-existent dictionary key directly raises a KeyError. Use .get(key, default) to safely provide a fallback value.",
+                    codeSnippet: "user = {'name': 'Alex', 'role': 'member'}\nstatus = user.get('status', 'active')\nprint(status)  # 'active'",
+                    language: "python"
+                }
+            ],
+            INTERMEDIATE: [
+                {
+                    title: "List Comprehensions with Filters",
+                    explanation: "Transform and filter data concisely in a single expressive line rather than writing nested loops and append statements.",
+                    codeSnippet: "scores = [45, 88, 72, 91, 60, 95]\nhigh_scores = [s for s in scores if s >= 75]\nprint(high_scores)  # [88, 91, 95]",
+                    language: "python"
+                },
+                {
+                    title: "Context Managers with 'with'",
+                    explanation: "Always open files or network connections using the 'with' statement. Python guarantees the resource is properly closed even if errors occur.",
+                    codeSnippet: "with open('club_log.txt', 'a') as f:\n    f.write('Club session logged successfully\\n')",
+                    language: "python"
+                }
+            ],
+            ADVANCED: [
+                {
+                    title: "Memory-Efficient Generators",
+                    explanation: "When dealing with large collections, use generators with 'yield' to process items one at a time without loading everything into memory.",
+                    codeSnippet: "def count_up(max_num):\n    n = 1\n    while n <= max_num:\n        yield n\n        n += 1",
+                    language: "python"
+                }
+            ]
+        },
+        javascript: {
+            BEGINNER: [
+                {
+                    title: "Template Literals (${...})",
+                    explanation: "Use backticks (`) and ${expression} instead of string concatenation (+) for clearer, readable multi-line strings and dynamic values.",
+                    codeSnippet: "const name = 'Sam';\nconst points = 120;\nconsole.log(`Member ${name} has ${points} points!`);",
+                    language: "javascript"
+                },
+                {
+                    title: "Array Destructuring",
+                    explanation: "Unpack values from arrays or objects directly into variables with a single concise statement.",
+                    codeSnippet: "const dimensions = [1920, 1080];\nconst [width, height] = dimensions;\nconsole.log(`Screen: ${width}x${height}`);",
+                    language: "javascript"
+                }
+            ],
+            INTERMEDIATE: [
+                {
+                    title: "Optional Chaining (?.)",
+                    explanation: "Safely read deeply nested object properties without encountering 'Cannot read properties of undefined' runtime crashes.",
+                    codeSnippet: "const member = { profile: { skills: ['Python', 'React'] } };\nconst primarySkill = member?.profile?.skills?.[0] ?? 'General';\nconsole.log(primarySkill);",
+                    language: "javascript"
+                }
+            ],
+            ADVANCED: [
+                {
+                    title: "Promise.allSettled for Parallel Tasks",
+                    explanation: "Execute multiple asynchronous requests in parallel and handle each outcome individually without one failure rejecting the whole batch.",
+                    codeSnippet: "const tasks = [fetch('/api/user'), fetch('/api/stats')];\nconst results = await Promise.allSettled(tasks);\nresults.forEach(r => console.log(r.status));",
+                    language: "javascript"
+                }
+            ]
+        }
+    };
+
     try {
         const text = await callAI([{ role: "user", content: prompt }], true);
         const result = parseJSONResponse(text);
-        return { ...result, language: lang };
+        if (result?.title && result?.codeSnippet) {
+            return { ...result, language: lang };
+        }
+        throw new Error("Invalid AI tip response");
     } catch (error) {
         console.warn("Hugging Face coding tip error, falling back to Gemini:", error);
-        const text = await callGemini(prompt);
-        const result = parseJSONResponse(text);
-        return { ...result, language: lang };
+        try {
+            const text = await callGemini(prompt);
+            const result = parseJSONResponse(text);
+            if (result?.title && result?.codeSnippet) {
+                return { ...result, language: lang };
+            }
+            throw new Error("Invalid Gemini tip response");
+        } catch (geminiError) {
+            console.warn("Gemini coding tip error, using curated fallback tip:", geminiError);
+            const list = fallbackTips[lang]?.[skillLevel] || fallbackTips[lang]?.BEGINNER || fallbackTips.python.BEGINNER;
+            const chosen = list[todayIndex % list.length];
+            return chosen;
+        }
     }
 };
 
