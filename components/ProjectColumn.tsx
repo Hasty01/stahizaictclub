@@ -90,7 +90,7 @@ const ProjectColumn: React.FC<ProjectColumnProps> = (props) => {
   return (
     <div
       ref={columnRef}
-      className="scroll-animate-fade bg-gray-100 dark:bg-gray-800/50 rounded-lg p-4 w-80 flex-shrink-0 border border-gray-200 dark:border-gray-700 h-full flex flex-col"
+      className="scroll-animate-fade bg-gray-100 dark:bg-gray-800/50 rounded-2xl p-3 sm:p-4 w-[85vw] sm:w-80 flex-shrink-0 border border-gray-200 dark:border-gray-700 h-full flex flex-col snap-start"
     >
       <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex-shrink-0">{column.title} ({tasks.length})</h3>
       <div 

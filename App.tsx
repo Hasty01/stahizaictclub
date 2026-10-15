@@ -25,6 +25,7 @@ import AlertModal from './components/AlertModal';
 import DeploymentChangelogModal from './components/DeploymentChangelogModal';
 import { DEPLOYMENT_CHANGELOGS, LATEST_DEPLOYMENT_CHANGELOG } from './deploymentChangelog';
 import StreakNoticeModal from './components/StreakNoticeModal';
+import BottomNav from './components/BottomNav';
 
 type View = 'welcome' | 'login' | 'signup' | 'dashboard' | 'patronLogin' | 'patronSignUp' | 'freeRunner';
 type Theme = 'light' | 'dark';
@@ -98,6 +99,7 @@ const App: React.FC = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
 
   // Apply theme to html element
   useEffect(() => {
@@ -111,15 +113,17 @@ const App: React.FC = () => {
     localStorage.setItem('app_theme', theme);
   }, [theme]);
 
+  const isEffectiveCollapsed = isSidebarCollapsed && !isSidebarHovered;
+
   useEffect(() => {
     const root = window.document.documentElement;
-    root.style.setProperty('--sidebar-width', isSidebarCollapsed ? '5.5rem' : '18rem');
-    if (isSidebarCollapsed) {
+    root.style.setProperty('--sidebar-width', isEffectiveCollapsed ? '5.5rem' : '18rem');
+    if (isEffectiveCollapsed) {
       root.removeAttribute('data-sidebar-expanded');
     } else {
       root.setAttribute('data-sidebar-expanded', 'true');
     }
-  }, [isSidebarCollapsed]);
+  }, [isEffectiveCollapsed]);
 
   // Listen for Font Changes
   useEffect(() => {
@@ -464,25 +468,27 @@ const App: React.FC = () => {
               onClose={handleSidebarToggle}
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={handleSidebarCollapseToggle}
+              onHoverChange={setIsSidebarHovered}
             />
             <div className="flex-1 flex flex-col w-full h-full relative overflow-hidden transition-all duration-300">
               {/* Unified Header (Mobile & Desktop) */}
-              <header data-app-header="true" className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between p-4 sticky top-0 z-20 flex-shrink-0">
-                <div className="flex items-center gap-3">
-                  <button onClick={handleSidebarToggle} className="md:hidden text-gray-600 dark:text-gray-300 p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Open menu">
+              <header data-app-header="true" className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-3 sm:px-4 py-3 sticky top-0 z-20 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <button onClick={handleSidebarToggle} className="md:hidden text-gray-600 dark:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0" aria-label="Open menu">
                     <MenuIcon />
                   </button>
                   {/* Mobile Title */}
-                  <h1 className="md:hidden text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-indigo-900">
+                  <h1 className="md:hidden text-lg sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-indigo-900 truncate">
                     ICT Club Hub
                   </h1>
                   {/* Desktop Title */}
-                  <h1 className="hidden md:block text-xl font-bold text-gray-800 dark:text-white capitalize">
+                  <h1 className="hidden md:block text-xl font-bold text-gray-800 dark:text-white capitalize truncate">
                     {activeTab === 'chat' ? 'Messages' : activeTab.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                   </h1>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-1.5 sm:gap-4 flex-shrink-0">
+                  {/* Desktop Streak */}
                   <div
                     className="hidden sm:flex items-center gap-2 rounded-full border border-amber-200/80 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5"
                     title={user.streakGraceUsed ? 'Streak grace used' : 'Streak grace available'}
@@ -496,6 +502,15 @@ const App: React.FC = () => {
                         {user.streakCount || 0} day{(user.streakCount || 0) === 1 ? '' : 's'}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Mobile Compact Streak */}
+                  <div
+                    className="sm:hidden flex items-center gap-1 rounded-full border border-amber-200/80 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 text-xs font-bold text-amber-700 dark:text-amber-300"
+                    title={`${user.streakCount || 0} day streak`}
+                  >
+                    <span aria-hidden="true" className="text-xs leading-none">🔥</span>
+                    <span>{user.streakCount || 0}</span>
                   </div>
 
                   <button
@@ -518,7 +533,7 @@ const App: React.FC = () => {
 
                   <button
                     onClick={() => handleTabChange('profile')}
-                    className="flex-shrink-0 ml-1 group"
+                    className="flex-shrink-0 ml-0.5 sm:ml-1 group"
                     aria-label="Go to Profile"
                     title="Profile"
                   >
@@ -532,7 +547,7 @@ const App: React.FC = () => {
               </header>
 
               {/* Conditionally apply padding and overflow for chat/playground to allow full height */}
-              <main className={`flex-1 h-full w-full ${(activeTab === 'chat' || activeTab === 'playground') ? 'overflow-hidden' : `${activeTab === 'feed' ? 'pt-0 px-4 sm:px-6 lg:px-8 pb-6' : 'p-4 sm:p-6 lg:p-8'} overflow-y-auto scroll-smooth custom-scrollbar`}`}>
+              <main className={`flex-1 h-full w-full ${(activeTab === 'chat' || activeTab === 'playground') ? 'overflow-hidden pb-16 md:pb-0' : `${activeTab === 'feed' ? 'pt-0 px-2 sm:px-6 lg:px-8 pb-20 md:pb-6' : 'p-3 sm:p-6 lg:p-8 pb-20 md:pb-8'} overflow-y-auto scroll-smooth custom-scrollbar`}`}>
                 <Dashboard
                   activeTab={activeTab}
                   setActiveTab={handleTabChange}
@@ -541,6 +556,13 @@ const App: React.FC = () => {
                   theme={theme}
                 />
               </main>
+
+              {/* Mobile Bottom Navigation */}
+              <BottomNav
+                activeTab={activeTab}
+                setActiveTab={handleTabChange}
+                onOpenSidebar={() => setIsSidebarOpen(true)}
+              />
             </div>
           </div>
       );

@@ -325,14 +325,14 @@ const Feed: React.FC<FeedProps> = ({ currentUser }) => {
           <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-indigo-300 dark:bg-indigo-900/10 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
       </div>
 
-      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8">
+      <div className="relative z-10 w-full px-1 sm:px-4 lg:px-8">
         {/* Sticky Header with Search & Filter */}
         <header ref={headerRef} className="sticky top-0 z-30 pt-0 pb-3 bg-gray-100/90 dark:bg-gray-900/90 backdrop-blur-md">
             <div className="mx-auto w-full">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
                     <div>
-                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Club Feed</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 hidden sm:block">Stay updated with the latest news.</p>
+                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Club Feed</h2>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">Stay updated with the latest news.</p>
                     </div>
                     {currentUser.role === 'PATRON' && (
                         <button 
@@ -340,23 +340,23 @@ const Feed: React.FC<FeedProps> = ({ currentUser }) => {
                             className="p-2 bg-sky-600 text-white rounded-full shadow-lg hover:bg-sky-700 transition-colors"
                             aria-label={isMobileComposeOpen ? 'Close post form' : 'Open post form'}
                         >
-                            <PlusCircleIcon className="w-6 h-6" />
+                            <PlusCircleIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                         </button>
                     )}
                 </div>
 
-                <div className="mt-3 rounded-2xl border border-gray-200/70 dark:border-gray-700/70 bg-white/80 dark:bg-gray-900/70 backdrop-blur-md p-3 shadow-sm">
-                    <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+                <div className="mt-2 sm:mt-3 rounded-2xl border border-gray-200/70 dark:border-gray-700/70 bg-white/80 dark:bg-gray-900/70 backdrop-blur-md p-2.5 sm:p-3 shadow-sm">
+                    <div className="flex flex-col lg:flex-row gap-2.5 sm:gap-3 lg:items-center">
                         <div className="relative flex-grow">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                <SearchIcon className="h-5 w-5" />
+                                <SearchIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                             </div>
                             <input
                                 type="text"
                                 placeholder="Search posts, authors, or keywords..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-sm transition-all"
+                                className="block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-sm transition-all"
                             />
                         </div>
                         
@@ -365,7 +365,7 @@ const Feed: React.FC<FeedProps> = ({ currentUser }) => {
                                 <FilterIcon className="h-4 w-4" />
                                 Filters
                             </div>
-                            <div className="flex gap-2 overflow-x-auto custom-scrollbar bg-gray-100 dark:bg-gray-800/60 p-1.5 rounded-xl">
+                            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto custom-scrollbar bg-gray-100 dark:bg-gray-800/60 p-1 sm:p-1.5 rounded-xl w-full sm:w-auto">
                                 {[
                                     { id: 'ALL', label: 'All' },
                                     { id: 'NEWS', label: 'News' },
@@ -377,7 +377,7 @@ const Feed: React.FC<FeedProps> = ({ currentUser }) => {
                                     <button
                                         key={pill.id}
                                         onClick={() => setFilter(pill.id as FilterCategory)}
-                                        className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
+                                        className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
                                             filter === pill.id 
                                             ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow'
                                             : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-white/70 dark:hover:bg-gray-700/70'
